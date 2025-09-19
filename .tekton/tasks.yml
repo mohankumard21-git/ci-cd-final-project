@@ -1,0 +1,55 @@
+apiVersion: tekton.dev/v1beta1
+kind: Task
+metadata:
+  name: cleanup
+spec:
+  description: This task will clean up a workspace by deleting all the files.
+  workspaces:
+    - name: source  # workspace name
+  steps:
+    - name: remove  # step name
+      image: alpine:3  # image used to execute the task
+      env:
+        - name: WORKSPACE_SOURCE_PATH
+          value: $(workspaces.source.path)  # environment variable for workspace path
+      workingDir: $(workspaces.source.path)  # working directory inside the workspace
+      securityContext:
+        runAsNonRoot: false  # allow root access
+        runAsUser: 0  # user ID for root access
+      script: |
+        #!/usr/bin/env sh
+        set -eu
+        echo "Removing all files from ${WORKSPACE_SOURCE_PATH} ..."
+        # Delete any existing contents of the directory if it exists.
+        if [ -d "${WORKSPACE_SOURCE_PATH}" ] ; then
+          # Delete non-hidden files and directories
+          rm -rf "${WORKSPACE_SOURCE_PATH:?}"/*
+          # Delete files and directories starting with . but excluding ..
+          rm -rf "${WORKSPACE_SOURCE_PATH}"/.[!.]*
+          # Delete files and directories starting with .. plus any other character
+          rm -rf "${WORKSPACE_SOURCE_PATH}"/..?*
+        fi
+
+
+apiVersion: tekton.dev/v1beta1
+kind: Task
+metadata:
+  name: nose  # Task name is "nose"
+spec:
+  workspaces:
+    - name: source  # The workspace used by this task is named "source"
+  params:
+    - name: args  # Parameter for arguments to be passed to the nose command
+      description: Arguments to pass to nose
+      type: string
+      default: "-v"  # Default argument for verbose mode
+  steps:
+    - name: nosetests  # The step will run the tests using nosetests
+      image: python:3.9-slim  # Use Python 3.9 slim image for the environment
+      workingDir: $(workspaces.source.path)  # The working directory is the mounted workspace
+      script: |
+        #!/bin/bash
+        set -e  # Exit immediately if a command exits with a non-zero status
+        python -m pip install --upgrade pip wheel  # Upgrade pip and wheel
+        pip install -r requirements.txt  # Install dependencies from requirements.txt
+        nosetests $(params.args)  # Run the tests with the passed arguments (default: -v)
